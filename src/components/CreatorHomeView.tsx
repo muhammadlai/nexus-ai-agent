@@ -58,7 +58,13 @@ import {
   Binary,
   Ear,
   CircuitBoard,
-  Waves
+  Waves,
+  ShieldCheck,
+  Eye,
+  LineChart,
+  ArrowUpRight,
+  ArrowDownRight,
+  Repeat
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ActiveView } from '../types';
@@ -158,6 +164,44 @@ interface MemoryTimelineEntry {
   accent: string;
 }
 
+interface BrainRegion {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  role: string;
+  activity: number;
+  latency: number;
+  gradient: string;
+  accent: string;
+}
+
+interface BrainSignal {
+  id: string;
+  label: string;
+  value: number;
+  unit: string;
+  decimals: number;
+  drift: number;
+  min: number;
+  max: number;
+  accent: string;
+}
+
+interface LiveStatSeries {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  value: number;
+  unit: string;
+  decimals: number;
+  drift: number;
+  min: number;
+  max: number;
+  history: number[];
+  stroke: string;
+  accent: string;
+}
+
 /* =========================================================================
    AI MEMORY / TELEMETRY DASHBOARD — HELPERS
    ========================================================================= */
@@ -227,6 +271,60 @@ const LiveProgressBar: React.FC<{ percent: number; gradient: string; height?: st
     />
   </div>
 );
+
+/** Animated SVG sparkline used by the live statistics ticker + brain waveform. */
+const Sparkline: React.FC<{ points: number[]; id: string; stroke: string; height?: string }> = ({
+  points,
+  id,
+  stroke,
+  height = 'h-10',
+}) => {
+  if (points.length < 2) return <div className={`w-full ${height}`} />;
+
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = 100 / (points.length - 1);
+
+  const coords = points.map((point, idx) => {
+    const x = idx * step;
+    const y = 30 - ((point - min) / span) * 26 - 2;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+
+  const linePath = `M${coords.join(' L')}`;
+  const areaPath = `${linePath} L100,32 L0,32 Z`;
+
+  return (
+    <svg viewBox="0 0 100 32" preserveAspectRatio="none" className={`w-full ${height}`}>
+      <defs>
+        <linearGradient id={`spark-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <motion.path
+        d={areaPath}
+        fill={`url(#spark-${id})`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      />
+      <motion.path
+        d={linePath}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.8, ease: 'easeOut' }}
+      />
+    </svg>
+  );
+};
 
 /** Animated SVG circular progress indicator. */
 const CircularMeter: React.FC<{ stat: CircularMeterStat }> = ({ stat }) => {
@@ -323,6 +421,19 @@ const INITIAL_MEMORY_METRICS: LiveMetric[] = [
     gradient: 'from-fuchsia-600 via-purple-600 to-indigo-600',
     accent: 'text-fuchsia-300',
     hint: 'Live prompt context',
+  },
+  {
+    id: 'context-memory',
+    label: 'Context Memory',
+    icon: ScanLine,
+    value: 612,
+    max: 900,
+    unit: ' frames',
+    decimals: 0,
+    drift: 9,
+    gradient: 'from-indigo-600 via-blue-600 to-cyan-500',
+    accent: 'text-indigo-300',
+    hint: 'Rolling context frames',
   },
   {
     id: 'conversation',
@@ -488,6 +599,186 @@ const FAVORITE_PROJECTS: { id: string; title: string; meta: string }[] = [
   { id: 'p4', title: 'Pulse Analytics', meta: 'FastAPI · PostgreSQL' },
 ];
 
+const INITIAL_BRAIN_REGIONS: BrainRegion[] = [
+  {
+    id: 'reasoning',
+    label: 'Reasoning Core',
+    icon: Brain,
+    role: 'Chain-of-thought synthesis',
+    activity: 82,
+    latency: 42,
+    gradient: 'from-purple-600 via-indigo-600 to-blue-600',
+    accent: 'text-purple-300',
+  },
+  {
+    id: 'planning',
+    label: 'Planning Cortex',
+    icon: Compass,
+    role: 'Task decomposition & routing',
+    activity: 68,
+    latency: 55,
+    gradient: 'from-fuchsia-600 via-purple-600 to-violet-700',
+    accent: 'text-fuchsia-300',
+  },
+  {
+    id: 'language',
+    label: 'Language Engine',
+    icon: MessageSquare,
+    role: 'Token generation & phrasing',
+    activity: 91,
+    latency: 28,
+    gradient: 'from-cyan-500 via-sky-600 to-indigo-600',
+    accent: 'text-cyan-300',
+  },
+  {
+    id: 'perception',
+    label: 'Perception Layer',
+    icon: Eye,
+    role: 'Vision, audio & UI signals',
+    activity: 54,
+    latency: 63,
+    gradient: 'from-emerald-500 via-teal-600 to-cyan-600',
+    accent: 'text-emerald-300',
+  },
+  {
+    id: 'recall',
+    label: 'Memory Recall',
+    icon: MemoryStick,
+    role: 'Vector + long-term retrieval',
+    activity: 76,
+    latency: 37,
+    gradient: 'from-violet-600 via-purple-700 to-fuchsia-600',
+    accent: 'text-violet-300',
+  },
+  {
+    id: 'tools',
+    label: 'Tool Execution',
+    icon: Code2,
+    role: 'Function calls & workflows',
+    activity: 63,
+    latency: 88,
+    gradient: 'from-amber-500 via-orange-600 to-rose-600',
+    accent: 'text-amber-300',
+  },
+  {
+    id: 'safety',
+    label: 'Safety Guardrails',
+    icon: ShieldCheck,
+    role: 'Policy & output validation',
+    activity: 97,
+    latency: 19,
+    gradient: 'from-lime-500 via-emerald-600 to-teal-600',
+    accent: 'text-lime-300',
+  },
+  {
+    id: 'reflection',
+    label: 'Self-Reflection',
+    icon: Repeat,
+    role: 'Critique & self-correction',
+    activity: 48,
+    latency: 74,
+    gradient: 'from-rose-500 via-pink-600 to-purple-600',
+    accent: 'text-rose-300',
+  },
+];
+
+const INITIAL_BRAIN_SIGNALS: BrainSignal[] = [
+  { id: 'neural-load', label: 'Neural Load', value: 68.4, unit: '%', decimals: 1, drift: 4, min: 25, max: 98, accent: 'text-purple-300' },
+  { id: 'synaptic-sync', label: 'Synaptic Sync', value: 92.7, unit: '%', decimals: 1, drift: 2, min: 60, max: 99.9, accent: 'text-cyan-300' },
+  { id: 'thought-depth', label: 'Thought Depth', value: 7.4, unit: ' layers', decimals: 1, drift: 0.6, min: 3, max: 12, accent: 'text-fuchsia-300' },
+  { id: 'focus-index', label: 'Focus Index', value: 86.1, unit: '%', decimals: 1, drift: 3, min: 40, max: 99, accent: 'text-emerald-300' },
+];
+
+const seedSeries = (base: number, spread: number): number[] =>
+  Array.from({ length: 24 }, () => base + (Math.random() - 0.5) * spread * 2);
+
+const INITIAL_LIVE_STATS: LiveStatSeries[] = [
+  {
+    id: 'throughput',
+    label: 'Prompt Throughput',
+    icon: Zap,
+    value: 284,
+    unit: ' /min',
+    decimals: 0,
+    drift: 22,
+    min: 120,
+    max: 460,
+    history: seedSeries(284, 40),
+    stroke: '#a855f7',
+    accent: 'text-purple-300',
+  },
+  {
+    id: 'memory-writes',
+    label: 'Memory Writes',
+    icon: Save,
+    value: 168,
+    unit: ' /min',
+    decimals: 0,
+    drift: 16,
+    min: 60,
+    max: 320,
+    history: seedSeries(168, 30),
+    stroke: '#22d3ee',
+    accent: 'text-cyan-300',
+  },
+  {
+    id: 'embedding-rate',
+    label: 'Embedding Rate',
+    icon: Binary,
+    value: 412,
+    unit: ' vec/s',
+    decimals: 0,
+    drift: 35,
+    min: 180,
+    max: 720,
+    history: seedSeries(412, 60),
+    stroke: '#e879f9',
+    accent: 'text-fuchsia-300',
+  },
+  {
+    id: 'recall-accuracy',
+    label: 'Recall Accuracy',
+    icon: Target,
+    value: 96.2,
+    unit: '%',
+    decimals: 1,
+    drift: 1.1,
+    min: 82,
+    max: 99.9,
+    history: seedSeries(96.2, 1.5),
+    stroke: '#34d399',
+    accent: 'text-emerald-300',
+  },
+  {
+    id: 'inference-latency',
+    label: 'Inference Latency',
+    icon: Timer,
+    value: 268,
+    unit: ' ms',
+    decimals: 0,
+    drift: 24,
+    min: 120,
+    max: 620,
+    history: seedSeries(268, 45),
+    stroke: '#fbbf24',
+    accent: 'text-amber-300',
+  },
+  {
+    id: 'agent-tasks',
+    label: 'Agent Tasks',
+    icon: Bot,
+    value: 46,
+    unit: ' active',
+    decimals: 0,
+    drift: 5,
+    min: 8,
+    max: 120,
+    history: seedSeries(46, 10),
+    stroke: '#f472b6',
+    accent: 'text-pink-300',
+  },
+];
+
 const INITIAL_MEMORY_TIMELINE: MemoryTimelineEntry[] = [
   { id: 't1', label: 'Session context checkpoint', detail: 'Compressed 18k tokens into long-term store', time: '2 min ago', accent: 'bg-purple-500' },
   { id: 't2', label: 'Knowledge graph rebuilt', detail: '1,284 documents re-linked', time: '18 min ago', accent: 'bg-cyan-500' },
@@ -526,6 +817,10 @@ export const CreatorHomeView: React.FC<CreatorHomeViewProps> = ({
   const [recentPrompts, setRecentPrompts] = useState<string[]>(INITIAL_RECENT_PROMPTS);
   const [memoryTimeline, setMemoryTimeline] = useState<MemoryTimelineEntry[]>(INITIAL_MEMORY_TIMELINE);
   const [statusCycleIndex, setStatusCycleIndex] = useState(0);
+  const [brainRegions, setBrainRegions] = useState<BrainRegion[]>(INITIAL_BRAIN_REGIONS);
+  const [brainSignals, setBrainSignals] = useState<BrainSignal[]>(INITIAL_BRAIN_SIGNALS);
+  const [brainWave, setBrainWave] = useState<number[]>(() => seedSeries(62, 18));
+  const [liveStats, setLiveStats] = useState<LiveStatSeries[]>(INITIAL_LIVE_STATS);
   const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>(() =>
     ACTIVITY_TEMPLATES.slice(0, 6).map((template, idx) => ({
       id: idx,
@@ -629,6 +924,26 @@ export const CreatorHomeView: React.FC<CreatorHomeViewProps> = ({
           ...stat,
           value: clampDrift(stat.value, stat.drift, stat.value * 0.85, stat.value * 1.15 + stat.drift),
         }))
+      );
+      setBrainRegions((prev) =>
+        prev.map((region) => ({
+          ...region,
+          activity: clampDrift(region.activity, 6, 24, 99),
+          latency: clampDrift(region.latency, 8, 12, 180),
+        }))
+      );
+      setBrainSignals((prev) =>
+        prev.map((signal) => ({
+          ...signal,
+          value: clampDrift(signal.value, signal.drift, signal.min, signal.max),
+        }))
+      );
+      setBrainWave((prev) => [...prev.slice(1), clampDrift(prev[prev.length - 1], 12, 20, 100)]);
+      setLiveStats((prev) =>
+        prev.map((stat) => {
+          const next = clampDrift(stat.value, stat.drift, stat.min, stat.max);
+          return { ...stat, value: next, history: [...stat.history.slice(1), next] };
+        })
       );
     }, 2200);
 
@@ -1216,7 +1531,7 @@ export const CreatorHomeView: React.FC<CreatorHomeViewProps> = ({
           <div className="relative z-10 flex items-center justify-between pb-3 border-b border-white/10">
             <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-400" />
-              <span>Live AI Activity</span>
+              <span>Live Memory Activity Feed</span>
             </h3>
             <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-300 uppercase tracking-widest">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -1297,6 +1612,129 @@ export const CreatorHomeView: React.FC<CreatorHomeViewProps> = ({
                 <Icon className="w-3.5 h-3.5" />
                 <span>{badge.label}</span>
                 {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />}
+              </motion.div>
+            );
+          })}
+        </div>
+      </motion.section>
+
+      {/* ===================================================================
+          AI BRAIN STATUS PANEL — COGNITIVE REGIONS + NEURAL SIGNALS
+          =================================================================== */}
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-6xl mx-auto relative z-10 rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-2xl p-5 shadow-2xl overflow-hidden"
+      >
+        <div className="absolute -top-24 left-1/3 w-72 h-72 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 right-0 w-72 h-72 bg-cyan-600/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-wrap items-end justify-between gap-3 pb-3 border-b border-white/10">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 flex items-center gap-2">
+              <motion.span
+                animate={{ scale: [1, 1.12, 1] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                className="inline-flex"
+              >
+                <Brain className="w-5 h-5 text-fuchsia-400" />
+              </motion.span>
+              <span>AI Brain Status</span>
+            </h2>
+            <p className="text-xs text-slate-400">
+              Cognitive region activity, latency, and live neural signal waveform.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-950/70 border border-fuchsia-500/30 text-[10px] font-mono text-fuchsia-300 uppercase tracking-widest">
+            <CircuitBoard className="w-3.5 h-3.5" />
+            <span>Cognition Core Online</span>
+          </div>
+        </div>
+
+        {/* Neural Signal Waveform + Aggregate Signals */}
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-4 pt-4">
+          <div className="lg:col-span-2 rounded-3xl bg-slate-950/60 border border-white/5 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                <Waves className="w-3.5 h-3.5 text-cyan-300" /> Neural Activity Waveform
+              </span>
+              <span className="text-[10px] font-mono text-cyan-300">
+                <AnimatedCounter value={brainWave[brainWave.length - 1]} decimals={1} suffix=" Hz" />
+              </span>
+            </div>
+            <Sparkline points={brainWave} id="brain-wave" stroke="#22d3ee" height="h-24" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {brainSignals.map((signal) => (
+              <motion.div
+                key={signal.id}
+                whileHover={{ scale: 1.03, y: -3 }}
+                className="rounded-2xl bg-slate-950/60 border border-white/5 hover:border-purple-500/30 p-3 transition-colors"
+              >
+                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500">{signal.label}</p>
+                <AnimatedCounter
+                  value={signal.value}
+                  decimals={signal.decimals}
+                  suffix={signal.unit}
+                  className={`block text-base font-extrabold font-mono ${signal.accent}`}
+                />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cognitive Regions */}
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+          {brainRegions.map((region, idx) => {
+            const Icon = region.icon;
+            return (
+              <motion.div
+                key={region.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: idx * 0.04 }}
+                whileHover={{ y: -6, scale: 1.03 }}
+                className="group relative rounded-3xl bg-slate-950/60 border border-white/5 hover:border-fuchsia-500/40 p-4 overflow-hidden transition-colors"
+              >
+                <div
+                  className={`absolute -bottom-10 -left-10 w-28 h-28 rounded-full bg-gradient-to-br ${region.gradient} opacity-15 blur-2xl group-hover:opacity-40 transition duration-500 pointer-events-none`}
+                />
+
+                <div className="relative z-10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div
+                      className={`w-9 h-9 rounded-2xl bg-gradient-to-br ${region.gradient} flex items-center justify-center text-white shadow-lg shadow-slate-950/70`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-mono text-slate-500">
+                      <AnimatedCounter value={region.latency} decimals={0} suffix=" ms" />
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-slate-100 truncate">{region.label}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{region.role}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <AnimatedCounter
+                      value={region.activity}
+                      decimals={0}
+                      suffix="% active"
+                      className={`text-[11px] font-mono ${region.accent}`}
+                    />
+                    <motion.span
+                      animate={{ opacity: [0.35, 1, 0.35] }}
+                      transition={{ duration: 1.8, repeat: Infinity, delay: idx * 0.15 }}
+                      className="w-1.5 h-1.5 rounded-full bg-fuchsia-400"
+                    />
+                  </div>
+
+                  <LiveProgressBar percent={region.activity} gradient={region.gradient} height="h-1" />
+                </div>
               </motion.div>
             );
           })}
@@ -1450,6 +1888,86 @@ export const CreatorHomeView: React.FC<CreatorHomeViewProps> = ({
                   <LiveProgressBar
                     percent={stat.decimals > 0 && stat.unit === '%' ? stat.value : 45 + (idx * 6) % 50}
                     gradient="from-purple-500 via-indigo-500 to-cyan-400"
+                    height="h-1"
+                  />
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </motion.section>
+
+      {/* ===================================================================
+          ANIMATED LIVE STATISTICS — SPARKLINE TICKER STRIP
+          =================================================================== */}
+      <motion.section
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-6xl mx-auto relative z-10 space-y-4"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-3">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 flex items-center gap-2">
+              <LineChart className="w-5 h-5 text-indigo-400" />
+              <span>Animated Live Statistics</span>
+            </h2>
+            <p className="text-xs text-slate-400">Rolling 24-point windows of throughput, recall, and latency.</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-slate-900/80 border border-indigo-500/30 backdrop-blur-xl text-[10px] font-mono text-indigo-300 uppercase tracking-widest">
+            <Activity className="w-3.5 h-3.5" />
+            <span>Streaming window</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {liveStats.map((stat, idx) => {
+            const Icon = stat.icon;
+            const previous = stat.history[stat.history.length - 2] ?? stat.value;
+            const delta = stat.value - previous;
+            const rising = delta >= 0;
+            const percent = ((stat.value - stat.min) / (stat.max - stat.min)) * 100;
+            return (
+              <motion.div
+                key={stat.id}
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: idx * 0.04 }}
+                whileHover={{ y: -6, scale: 1.02 }}
+                className="group relative rounded-3xl bg-slate-900/70 border border-white/10 hover:border-indigo-500/40 backdrop-blur-2xl p-4 shadow-xl overflow-hidden transition-colors"
+              >
+                <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-indigo-600/15 blur-3xl group-hover:bg-indigo-500/25 transition duration-500 pointer-events-none" />
+
+                <div className="relative z-10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-[11px] font-semibold text-slate-300">
+                      <Icon className={`w-4 h-4 ${stat.accent}`} />
+                      {stat.label}
+                    </span>
+                    <span
+                      className={`flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                        rising
+                          ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                          : 'text-rose-300 border-rose-500/30 bg-rose-500/10'
+                      }`}
+                    >
+                      {rising ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                      {Math.abs(delta).toFixed(stat.decimals)}
+                    </span>
+                  </div>
+
+                  <AnimatedCounter
+                    value={stat.value}
+                    decimals={stat.decimals}
+                    suffix={stat.unit}
+                    className="block text-xl font-extrabold text-slate-100 font-mono"
+                  />
+
+                  <Sparkline points={stat.history} id={stat.id} stroke={stat.stroke} height="h-12" />
+
+                  <LiveProgressBar
+                    percent={percent}
+                    gradient="from-indigo-500 via-purple-500 to-cyan-400"
                     height="h-1"
                   />
                 </div>
