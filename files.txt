@@ -1,0 +1,11 @@
+src/App.tsx
+src/components/AuthModal.tsx
+src/components/ChatWindow.tsx
+src/components/FastApiHealthCard.tsx
+src/components/N8nWebhookPanel.tsx
+src/components/SettingsModal.tsx
+src/components/Sidebar.tsx
+src/components/oeky
+src/index.css
+src/main.tsx
+src/types.ts
